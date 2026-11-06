@@ -478,12 +478,12 @@ elif data == "stats":
         reply_markup
         
     elif data == "stats":
-        await query.edit_message_text(
-            f"📊 Total: {user_stats.get(uid, 0)}\n"
-            f"Mode: {mode_label(user_mode.get(uid, 'video'))}\n"
-            f"Kualitas: {quality_label(uid)}",
-            reply_markup=main_menu(),
-        )
+    await query.edit_message_text(
+        f"📊 Total: {user_stats.get(uid, 0)}\n"
+        f"Mode: {mode_label(user_mode.get(uid, 'video'))}\n"
+        f"Kualitas: {quality_label(uid)}",
+        reply_markup=main_menu(),
+    )
 
     elif data == "history":
         history = user_history.get(uid, [])
