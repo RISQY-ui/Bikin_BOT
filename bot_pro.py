@@ -3,7 +3,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import yt_dlp
 TOKEN = os.environ.get("TOKEN")
-GROQ_KEY = os.environ.get("GROQ_API_KEY", "")
+GROQ_KEY = os.environ.get("GROQ_API_KEY", "") or os.environ.get("groq", "") or os.environ.get("GROQ", "") or os.environ.get("GROQ_API", "")
 user_mode = {}
 user_quality = {}
 user_history = {}
@@ -44,7 +44,7 @@ def ai_brain(uid, text):
     if GROQ_KEY:
         try:
             msgs = [{"role":"system","content":"Kamu adalah Tiara, asisten AI ramah, lucu, santai, bahasa Indonesia gaul Semarang. Bantu Faris."}] + chat_memory[uid][-6:]
-            data = json.dumps({"model":"llama-3.1-8b-instant","messages":msgs,"temperature":0.8,"max_tokens":500}).encode()
+            data = json.dumps({"model":"llama-3.3-70b-versatile","messages":msgs,"temperature":0.8,"max_tokens":500}).encode()
             req = urllib.request.Request("https://api.groq.com/openai/v1/chat/completions", data=data, headers={"Authorization":f"Bearer {GROQ_KEY}","Content-Type":"application/json"})
             with urllib.request.urlopen(req, timeout=20) as r:
                 res = json.loads(r.read().decode())
