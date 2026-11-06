@@ -71,9 +71,12 @@ def ai_brain(uid, text):
         return "Hehehe makasih Faris! 🥰 Kamu juga keren, dari gak tau bot sama sekali sekarang udah bisa bikin bot sendiri!"
     if any(x in t for x in ["makan","lapar"]):
         return "Laper ya? Di Semarang banyak yang enak! Lumpia, tahu gimbal! Udah makan belum? Jangan telat makan ya!"
+    # Fallback lebih luwes kalau Groq lagi error - biar gak kaku
+    if "pr" in t or "tugas" in t or "soal" in t or "kerjakan" in t:
+        return "PR apa, Faris? Sini kirim soalnya, aku bantuin mikir bareng! Jangan cuma bilang 'kerjakan pr' doang, kirim fotonya / tulis soalnya di sini, nanti aku bantu jawab + jelasin caranya!"
     if "?" in t:
-        return f"Hmm pertanyaan bagus, Faris! Menurut aku sih... {text} itu tergantung mood kamu. Kalau menurut kamu gimana? Cerita dong!"
-    return random.choice([f"Ohh gitu ya, {text}? Menarik banget! Cerita lebih lanjut dong, aku penasaran! 🤔",f"Hmm aku ngerti maksud kamu, {text}. Terus gimana? Aku dengerin kok!",f"Wah kalau soal {text} aku setuju! Kamu emang pinter. Ada lagi gak ceritanya?"])
+        return f"Ooh soal '{text}' ya? Menurut aku gini, Faris... yang penting kamu paham konsepnya dulu. Coba ceritain ke aku, yang bikin kamu bingung bagian mananya? Biar aku jelasin pelan-pelan."
+    return random.choice([f"Wah soal '{text}' itu menarik! Coba ceritain lebih detail, Faris, aku mau bantuin sampe beres!",f"Hmm aku dengerin nih, soal '{text}'... Terus kamu maunya aku bantuin gimana? Jelasin, bikinin contoh, atau temenin belajar?",f"Oke, soal '{text}' ya. Sini kita bedah bareng, jangan dipendem sendiri!"])
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user_mode[uid] = "video"
@@ -149,6 +152,28 @@ def extract_urls(text):
     return re.findall(r'https?://[^\s]+', text)
 async def handle_one(update, context, url, mode):
     uid = update.effective_user.id
+    # Khusus TikTok Foto / Slideshow - yt-dlp memang tidak support
+    if "/photo/" in url or "/photo" in url.split("?")[0].split("/")[-1]:
+        try:
+            with yt_dlp.YoutubeDL({'quiet':True,'noplaylist':True,'skip_download':True}) as ydl:
+                info = ydl.extract_info(url, download=False)
+            # Coba kirim cover / thumbnail-nya
+            thumbs = []
+            if info.get('thumbnail'): thumbs.append(info.get('thumbnail'))
+            if info.get('thumbnails'):
+                for th in info.get('thumbnails')[-2:]:
+                    if th.get('url'): thumbs.append(th.get('url'))
+            if thumbs:
+                for th in list(dict.fromkeys(thumbs))[:3]:
+                    try: await update.message.reply_photo(photo=th, caption=f"📸 Foto TikTok (cover)\n{info.get('title','')[:100]}")
+                    except: pass
+                await update.message.reply_text("📸 Ini cover foto-nya yang berhasil diambil.\n\nUntuk foto slideshow full-nya, TikTok Foto memang belum bisa di-download pakai bot ini, Faris. Solusinya: buka linknya di TikTok, terus screenshot / save manual ya. Yang bisa di-download bot ini cuma TikTok VIDEO.", reply_markup=main_menu())
+                add_history(uid, info.get('title','TikTok Foto'))
+                return
+        except Exception as e:
+            pass
+        await update.message.reply_text("📸 Oops, ini link TikTok FOTO / Slideshow, bukan VIDEO.\n\nTikTok Foto memang belum bisa di-download pakai yt-dlp, jadi bot belum bisa ambil foto-fotonya.\n\nSolusi: buka linknya di TikTok, terus screenshot / save manual.\nKalau mau download, kirim link TikTok VIDEO yang ada tombol play-nya ya!", reply_markup=main_menu())
+        return
     if mode == "info":
         try:
             with yt_dlp.YoutubeDL({'quiet':True,'noplaylist':True,'skip_download':True}) as ydl:
@@ -180,7 +205,8 @@ async def handle_one(update, context, url, mode):
     q = user_quality.get(uid, "hd")
     fmt_map = {"sd":"best[height<=480][ext=mp4]/best[height<=480]/best","hd":"best[height<=720][ext=mp4]/best[height<=720]/best","fhd":"best[height<=1080][ext=mp4]/best[height<=1080]/best"}
     if mode == "audio":
-        ydl_opts = {'format':'bestaudio/best','postprocessors':[{'key':'FFmpegExtractAudio','preferredcodec':'mp3','preferredquality':'192'}],'outtmpl':'audio_%(id)s.%(ext)s','quiet':True,'noplaylist':True,'max_filesize':45*1024*1024}
+        # Tanpa FFmpeg biar jalan di Railway - download audio asli (m4a/webm), Telegram tetep bisa puter
+        ydl_opts = {'format':'bestaudio[ext=m4a]/bestaudio/best','outtmpl':'audio_%(id)s.%(ext)s','quiet':True,'noplaylist':True,'max_filesize':45*1024*1024}
     elif mode == "compress":
         ydl_opts = {'format':'best[height<=480][ext=mp4]/best[height<=480]/best','outtmpl':'download_%(id)s.%(ext)s','quiet':True,'noplaylist':True,'max_filesize':45*1024*1024}
     elif mode == "photo":
@@ -202,10 +228,8 @@ async def handle_one(update, context, url, mode):
                 title = info.get('title','Video')[:100]
         for fn in files:
             if mode == "audio":
-                base = os.path.splitext(fn)[0]
-                fn2 = base + ".mp3"
-                if os.path.exists(fn2): fn = fn2
-                elif not os.path.exists(fn):
+                # Cari file audio hasil download (m4a/webm/mp3) - jangan maksa .mp3
+                if not os.path.exists(fn):
                     for f in os.listdir("."):
                         if f.startswith("audio_"): fn = f; break
             if not os.path.exists(fn): continue
@@ -220,9 +244,20 @@ async def handle_one(update, context, url, mode):
         await status.delete()
         user_mode[uid] = "video"
     except Exception as e:
-        await status.edit_text(f"Gagal 😢\n{url[:80]}\nCoba mode Compress / SD.\nError: {e}", reply_markup=main_menu())
+        await status.edit_text(f"Gagal 😢\n{url[:80]}\n\nKalau linknya TikTok FOTO / Slideshow, memang belum bisa ya. Coba link VIDEO.\nKalau link VIDEO, coba mode Compress / SD.\nError: {e}", reply_markup=main_menu())
 async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
+    uid = update.effective_user.id
+    mode = user_mode.get(uid, "video")
+    urls = extract_urls(text)
+    if mode == "ai" and not urls:
+        await update.message.reply_text("🤖 Tiara lagi mikir... ⏳")
+        reply = ai_brain(uid, text)
+        await update.message.reply_text(reply, reply_markup=main_menu())
+        return
+    if not urls and mode == "video":
+        if len(text) < 100 and "http" not in text:
+            await update.message.text.strip()
     uid = update.effective_user.id
     mode = user_mode.get(uid, "video")
     urls = extract_urls(text)
