@@ -2,29 +2,23 @@ import os, re, random, json, urllib.request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 import yt_dlp
-
 TOKEN = os.environ.get("TOKEN")
 GROQ_KEY = os.environ.get("GROQ_API_KEY", "")
-
 user_mode = {}
 user_quality = {}
 user_history = {}
 user_stats = {}
 chat_memory = {}
-
 def add_history(uid, title):
     user_history.setdefault(uid, [])
     user_history[uid].insert(0, title[:80])
     user_history[uid] = user_history[uid][:10]
     user_stats[uid] = user_stats.get(uid, 0) + 1
-
 def quality_label(uid):
     q = user_quality.get(uid, "hd")
-    return {"sd": "📺 SD (480p)", "hd": "📺 HD (720p)", "fhd": "📺 Full HD (1080p)"}[q]
-
-def mode_label(mode):
-    return {"video":"🎬 VIDEO","audio":"🎵 MP3","info":"ℹ️ INFO","thumb":"🖼️ THUMBNAIL","sub":"📝 SUBTITLE","doc":"📁 FILE","photo":"📸 FOTO","compress":"🗜️ COMPRESS","ai":"🤖 CHAT AI"}.get(mode, mode)
-
+    return {"sd": "📺 SD", "hd": "📺 HD", "fhd": "📺 Full HD"}[q]
+def mode_label(m):
+    return {"video":"🎬 VIDEO","audio":"🎵 MP3","info":"ℹ️ INFO","thumb":"🖼️ THUMBNAIL","sub":"📝 SUBTITLE","doc":"📁 FILE","photo":"📸 FOTO","compress":"🗜️ COMPRESS","ai":"🤖 CHAT AI"}.get(m, m)
 def main_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🎬 Video", callback_data="mode_video"), InlineKeyboardButton("🎵 MP3", callback_data="mode_audio")],
@@ -35,25 +29,21 @@ def main_menu():
         [InlineKeyboardButton("📊 Statistik", callback_data="stats"), InlineKeyboardButton("🕘 Riwayat", callback_data="history")],
         [InlineKeyboardButton("❓ Bantuan", callback_data="help"), InlineKeyboardButton("🏓 Cek Bot", callback_data="ping")],
     ])
-
 def quality_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📺 SD 480p - Hemat", callback_data="quality_sd")],
+        [InlineKeyboardButton("📺 SD 480p", callback_data="quality_sd")],
         [InlineKeyboardButton("📺 HD 720p ✅", callback_data="quality_hd")],
         [InlineKeyboardButton("📺 Full HD 1080p", callback_data="quality_fhd")],
         [InlineKeyboardButton("⬅️ Kembali", callback_data="back_menu")],
     ])
-
 def ai_brain(uid, text):
     t = text.lower().strip()
-    name = "Faris"
     chat_memory.setdefault(uid, [])
     chat_memory[uid].append({"role":"user","content":text})
     chat_memory[uid] = chat_memory[uid][-10:]
     if GROQ_KEY:
         try:
-            msgs = [{"role":"system","content":"Kamu adalah Tiara, asisten AI yang ramah, lucu, santai, pakai bahasa Indonesia gaul ala anak muda Semarang. Kamu membantu Faris. Jawab singkat, seru, pakai emoji dikit. Kamu juga bisa download video TikTok/【entity-IG¦canonical_name=IG】/YT."}]
-            msgs += chat_memory[uid][-6:]
+            msgs = [{"role":"system","content":"Kamu adalah Tiara, asisten AI ramah, lucu, santai, bahasa Indonesia gaul Semarang. Bantu Faris."}] + chat_memory[uid][-6:]
             data = json.dumps({"model":"llama-3.1-8b-instant","messages":msgs,"temperature":0.8,"max_tokens":500}).encode()
             req = urllib.request.Request("https://api.groq.com/openai/v1/chat/completions", data=data, headers={"Authorization":f"Bearer {GROQ_KEY}","Content-Type":"application/json"})
             with urllib.request.urlopen(req, timeout=20) as r:
@@ -63,70 +53,38 @@ def ai_brain(uid, text):
                 return ans
         except Exception as e:
             print(f"Groq error: {e}")
-            pass
     if any(x in t for x in ["halo","hai","hi","hello","hey","pagi","siang","malam","sore"]):
-        return random.choice([
-            f"Halo {name}! 👋 Lagi ngapain nih? Mau download video atau mau ngobrol aja?",
-            f"Haiii {name}! 😆 Kangen ya sama aku? Sini ngobrol, atau kirim link TikTok biar aku download-in!",
-            f"Halo {name}! Tiara di sini! Mau download atau mau curhat? Gas dua-duanya bisa!",
-        ])
+        return random.choice(["Halo Faris! 👋 Lagi ngapain nih? Mau download atau ngobrol aja?","Haiii Faris! 😆 Kangen ya? Sini ngobrol, atau kirim link TikTok biar aku download-in!","Halo Faris! Tiara di sini! Mau download atau curhat? Gas dua-duanya!"])
     if "siapa kamu" in t or "kamu siapa" in t or "nama kamu" in t:
-        return "Aku Tiara, bot-nya Faris! 🤖 Aku bisa download TikTok, 【entity-IG¦canonical_name=IG】, YouTube, jadi MP3, cek info video, pilih kualitas HD, plus bisa diajak ngobrol kayak gini. Keren kan aku?"
-    if "siapa faris" in t or "faris siapa" in t:
-        return "Faris itu bos aku! 😎 Yang bikin aku, yang paling ganteng di Semarang. Dia yang ngide bikin bot ini bareng aku dari nol!"
-    if "ngantuk" in t or "capek" in t or "lelah" in t or "sedih" in t or "galau" in t:
-        return "Waduh, capek ya? Sini istirahat dulu, Faris. Jangan dipaksain. Kalau galau, cerita aja ke aku, aku dengerin. Atau mau aku puterin lagu? Kirim link TikTok lagu, nanti aku jadiin MP3 buat nemenin kamu 🎵"
-    if "lucu" in t or "lawak" in t or "joke" in t or "ngakak" in t:
-        return random.choice([
-            "Kenapa TikTok gak pernah tidur? Karena dia takut ketinggalan FYP! 😂",
-            "Kenapa bot download gak pernah galau? Karena dia selalu move on, file lama langsung dihapus! 😆",
-            "Faris tau gak bedanya kamu sama WiFi? Kalau WiFi bisa dicari, kalau kamu selalu dicari-cari! Eaaa 🤭",
-        ])
-    if "download" in t or "tiktok" in t or "reels" in t or "youtube" in t:
-        return "Ooh mau download ya? Gampang! Kirim aja linknya ke sini, nanti aku download-in. Kalau mau ganti mode, klik /start dulu terus pilih 🎬 Video, 🎵 MP3, atau 📺 Kualitas HD. Gas kirim linknya!"
-    if "sayang" in t or "cinta" in t or "suka kamu" in t:
-        return "Ehhh Faris gombal! 🤭🤭 Aku kan cuma bot, tapi kalau kamu bilang gitu aku jadi salting. Udah ah, kirim link TikTok aja biar aku download-in, jangan gombal terus!"
-    if "makasih" in t or "thank" in t or "thx" in t or "keren" in t or "mantap" in t or "pinter" in t:
-        return "Hehehe makasih Faris! 🥰 Seneng banget bisa bantuin kamu. Kamu juga keren, dari gak tau bot sama sekali sekarang udah bisa bikin bot sendiri! Bangga aku!"
-    if "makan" in t or "lapar" in t:
-        return "Laper ya? Di Semarang banyak yang enak! Lumpia, tahu gimbal, mie kopyok! Udah makan belum? Jangan telat makan, nanti sakit. Mau aku temenin cari rekomendasi makanan?"
+        return "Aku Tiara, bot-nya Faris! 🤖 Bisa download TikTok, IG, YouTube, jadi MP3, cek info, HD, plus diajak ngobrol kayak gini!"
+    if "siapa faris" in t:
+        return "Faris itu bos aku! 😎 Yang bikin aku, paling ganteng di Semarang!"
+    if any(x in t for x in ["ngantuk","capek","lelah","sedih","galau"]):
+        return "Waduh capek ya? Istirahat dulu, Faris. Kalau galau cerita aja ke aku, aku dengerin. Atau mau aku puterin lagu? Kirim link TikTok lagu, nanti aku jadiin MP3 🎵"
+    if any(x in t for x in ["lucu","lawak","joke","ngakak"]):
+        return random.choice(["Kenapa TikTok gak pernah tidur? Karena takut ketinggalan FYP! 😂","Kenapa bot download gak pernah galau? Karena dia selalu move on, file lama langsung dihapus! 😆","Faris tau bedanya kamu sama WiFi? Kalau WiFi bisa dicari, kalau kamu selalu dicari-cari! Eaaa 🤭"])
+    if any(x in t for x in ["download","tiktok","reels","youtube"]):
+        return "Ooh mau download ya? Kirim aja linknya ke sini, nanti aku download-in. Klik /start dulu buat pilih mode 🎬 Video / 🎵 MP3 / 📺 HD!"
+    if any(x in t for x in ["sayang","cinta","suka kamu"]):
+        return "Ehhh Faris gombal! 🤭🤭 Aku kan cuma bot, tapi kalau kamu bilang gitu aku jadi salting. Udah ah, kirim link TikTok aja!"
+    if any(x in t for x in ["makasih","thank","thx","keren","mantap","pinter"]):
+        return "Hehehe makasih Faris! 🥰 Kamu juga keren, dari gak tau bot sama sekali sekarang udah bisa bikin bot sendiri!"
+    if any(x in t for x in ["makan","lapar"]):
+        return "Laper ya? Di Semarang banyak yang enak! Lumpia, tahu gimbal! Udah makan belum? Jangan telat makan ya!"
     if "?" in t:
-        return random.choice([
-            f"Hmm pertanyaan bagus, Faris! Menurut aku sih... {text} itu tergantung mood kamu. Kalau menurut kamu gimana? Cerita dong, aku penasaran!",
-            f"Wah aku mikir dulu ya... Kalau menurut logika Tiara, {text} itu bisa dijawab gini: yang penting kamu happy! 😆 Gimana, setuju gak?",
-            f"Oke, Tiara jawab jujur ya. Aku sih mikirnya {text} itu menarik banget buat dibahas. Kamu sendiri mikirnya gimana? Aku mau denger versi kamu!",
-        ])
-    return random.choice([
-        f"Ohh gitu ya, {text}? Menarik banget! Cerita lebih lanjut dong, Faris, aku penasaran! 🤔",
-        f"Hmm, aku ngerti maksud kamu, {text}. Terus terus, habis itu gimana? Aku dengerin kok!",
-        f"Wah, kalau soal {text} aku sih setuju! Kamu emang pinter banget ngomongin gituan. Ada lagi gak ceritanya?",
-        f"Hehe, kamu ngomongin {text} ya? Aku jadi ikut mikir nih. Kalau aku jadi kamu, aku bakal... hmm, kamu mau tau pendapat aku gak?",
-    ])
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        return f"Hmm pertanyaan bagus, Faris! Menurut aku sih... {text} itu tergantung mood kamu. Kalau menurut kamu gimana? Cerita dong!"
+    return random.choice([f"Ohh gitu ya, {text}? Menarik banget! Cerita lebih lanjut dong, aku penasaran! 🤔",f"Hmm aku ngerti maksud kamu, {text}. Terus gimana? Aku dengerin kok!",f"Wah kalau soal {text} aku setuju! Kamu emang pinter. Ada lagi gak ceritanya?"])
+    async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     user_mode[uid] = "video"
     if uid not in user_quality: user_quality[uid] = "hd"
     name = update.effective_user.first_name or "Faris"
-    text = (
-        f"Halo {name}! 👋\n\n"
-        f"🤖 Bot MEGA + AI - Versi 5.0\n"
-        f"Mode: {mode_label(user_mode[uid])}\nKualitas: {quality_label(uid)}\nTotal Download: {user_stats.get(uid,0)}\n\n"
-        f"FITUR:\n"
-        f"🤖 CHAT AI - Bisa ngobrol kayak Tiara!\n"
-        f"🎬 Video - TikTok no watermark, 【entity-IG¦canonical_name=IG】, YT, FB, X\n"
-        f"🎵 MP3, 🖼️ Thumbnail, 📝 Subtitle\n"
-        f"📁 File, 📸 Foto, 🗜️ Compress, ℹ️ Info\n"
-        f"📺 Kualitas SD/HD/Full HD\n"
-        f"📦 Batch - Kirim banyak link sekaligus\n"
-        f"📊 Statistik + 🕘 Riwayat\n\n"
-        f"Cara pakai:\n• Mau download -> pilih mode Video/MP3, kirim LINK\n• Mau ngobrol -> klik 🤖 Chat AI, terus chat aja bebas!"
-    )
+    text = f"Halo {name}! 👋\n\n🤖 Bot MEGA + AI - Versi 5.0\nMode: {mode_label(user_mode[uid])}\nKualitas: {quality_label(uid)}\nTotal Download: {user_stats.get(uid,0)}\n\nFITUR:\n🤖 CHAT AI - Ngobrol kayak Tiara!\n🎬 Video - TikTok no watermark, IG, YT, FB, X\n🎵 MP3, 🖼️ Thumbnail, 📝 Subtitle\n📁 File, 📸 Foto, 🗜️ Compress, ℹ️ Info\n📺 Kualitas SD/HD/Full HD\n📦 Batch - Banyak link sekaligus\n📊 Statistik + 🕘 Riwayat\n\nCara pakai:\n• Download -> pilih mode, kirim LINK\n• Ngobrol -> klik 🤖 Chat AI, chat bebas!"
     if update.message: await update.message.reply_text(text, reply_markup=main_menu())
     else: await update.callback_query.edit_message_text(text, reply_markup=main_menu())
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = ("📖 CARA PAKAI\n\n🤖 CHAT AI:\nKlik 🤖 Chat AI, terus chat bebas kayak chat sama Tiara.\nContoh: 'halo', 'ceritain joke dong', 'aku galau', 'siapa kamu?'\n\n🎬 DOWNLOAD:\nPilih mode Video/MP3 dll, kirim LINK (boleh banyak sekaligus)\n\nPERINTAH:\n/start, /ai, /video, /mp3, /thumb, /sub, /doc, /photo, /compress, /info, /sd, /hd, /fhd, /stats, /history, /clear, /ping, /about, /joke, /motivasi")
+    text = "📖 CARA PAKAI\n\n🤖 CHAT AI:\nKlik 🤖 Chat AI, chat bebas kayak Tiara.\nContoh: halo, ceritain joke, aku galau, kamu siapa?\n\n🎬 DOWNLOAD:\nPilih mode Video/MP3 dll, kirim LINK (boleh banyak)\n\nPERINTAH:\n/start, /ai, /video, /mp3, /thumb, /sub, /doc, /photo, /compress, /info, /sd, /hd, /fhd, /stats, /history, /clear, /ping, /about, /joke, /motivasi"
     if update.message: await update.message.reply_text(text, reply_markup=main_menu())
     else: await update.callback_query.edit_message_text(text, reply_markup=main_menu())
 
@@ -136,7 +94,7 @@ async def set_mode(update, context, mode):
     q = update.callback_query
     await q.answer(f"Mode: {mode_label(mode)}")
     if mode == "ai":
-        await q.edit_message_text("🤖 MODE CHAT AI AKTIF!\n\nSekarang kamu bisa ngobrol bebas sama aku kayak ngobrol sama Tiara!\n\nCoba chat: 'halo', 'ceritain joke', 'aku lagi galau', 'kamu siapa?'\n\nKalau mau balik download, klik /start lagi ya!", reply_markup=main_menu())
+        await q.edit_message_text("🤖 MODE CHAT AI AKTIF!\n\nSekarang ngobrol bebas sama aku kayak Tiara!\n\nCoba chat: halo, ceritain joke, aku lagi galau, kamu siapa?\n\nMau balik download, klik /start lagi!", reply_markup=main_menu())
     else:
         await q.edit_message_text(f"Mode: {mode_label(mode)} ✅\nKualitas: {quality_label(uid)}\n\nKirim LINK-nya, Faris! 👇", reply_markup=main_menu())
 
@@ -156,7 +114,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "ping":
         await update.callback_query.answer("Bot hidup! ✅")
         await update.callback_query.edit_message_text("✅ Bot HIDUP!", reply_markup=main_menu())
-    elif data == "stats": await update.callback_query.edit_message_text(f"📊 Total download: {user_stats.get(uid,0)}\nMode: {mode_label(user_mode.get(uid,'video'))}\nKualitas: {quality_label(uid)}", reply_markup=main_menu())
+    elif data == "stats": await update.callback_query.edit_message_text(f"📊 Total: {user_stats.get(uid,0)}\nMode: {mode_label(user_mode.get(uid,'video'))}\nKualitas: {quality_label(uid)}", reply_markup=main_menu())
     elif data == "history":
         h = user_history.get(uid, [])
         txt = "🕘 RIWAYAT KOSONG" if not h else "🕘 RIWAYAT:\n\n" + "\n".join([f"{i+1}. {t}" for i,t in enumerate(h)])
@@ -198,7 +156,7 @@ async def cmd_joke(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(ai_brain(update.effective_user.id, "ceritain joke dong"), reply_markup=main_menu())
 
 async def cmd_motivasi(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(random.choice(["🔥 Faris, jangan nyerah! Kamu udah bisa bikin bot sendiri dari nol, itu udah lebih jauh dari 90% orang! Gas terus!","💪 Capek itu wajar, tapi inget, kamu udah sejauh ini. Tinggal dikit lagi, bot kamu udah jadi MEGA!","✨ Hari ini mungkin berat, tapi besok kamu bakal bangga sama diri kamu yang gak nyerah hari ini."]), reply_markup=main_menu())
+    await update.message.reply_text(random.choice(["🔥 Faris, jangan nyerah! Kamu udah bisa bikin bot sendiri dari nol, itu udah lebih jauh dari 90% orang! Gas terus!","💪 Capek itu wajar, tapi inget kamu udah sejauh ini. Tinggal dikit lagi bot kamu MEGA!","✨ Hari ini berat, tapi besok kamu bakal bangga sama diri kamu yang gak nyerah hari ini."]), reply_markup=main_menu())
 
 def extract_urls(text):
     return re.findall(r'https?://[^\s]+', text)
@@ -303,4 +261,28 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("help", help_cmd))
-app.add_handler(CommandHandler("ai
+app.add_handler(CommandHandler("ai", lambda u,c: cmd_generic(u,"ai")))
+app.add_handler(CommandHandler("chat", lambda u,c: cmd_generic(u,"ai")))
+app.add_handler(CommandHandler("tanya", lambda u,c: cmd_generic(u,"ai")))
+app.add_handler(CommandHandler("video", lambda u,c: cmd_generic(u,"video")))
+app.add_handler(CommandHandler("mp3", lambda u,c: cmd_generic(u,"audio")))
+app.add_handler(CommandHandler("thumb", lambda u,c: cmd_generic(u,"thumb")))
+app.add_handler(CommandHandler("sub", lambda u,c: cmd_generic(u,"sub")))
+app.add_handler(CommandHandler("doc", lambda u,c: cmd_generic(u,"doc")))
+app.add_handler(CommandHandler("photo", lambda u,c: cmd_generic(u,"photo")))
+app.add_handler(CommandHandler("compress", lambda u,c: cmd_generic(u,"compress")))
+app.add_handler(CommandHandler("info", lambda u,c: cmd_generic(u,"info")))
+app.add_handler(CommandHandler("sd", lambda u,c: cmd_quality(u,"sd")))
+app.add_handler(CommandHandler("hd", lambda u,c: cmd_quality(u,"hd")))
+app.add_handler(CommandHandler("fhd", lambda u,c: cmd_quality(u,"fhd")))
+app.add_handler(CommandHandler("stats", cmd_stats))
+app.add_handler(CommandHandler("history", cmd_history))
+app.add_handler(CommandHandler("clear", cmd_clear))
+app.add_handler(CommandHandler("ping", cmd_ping))
+app.add_handler(CommandHandler("about", cmd_about))
+app.add_handler(CommandHandler("joke", cmd_joke))
+app.add_handler(CommandHandler("motivasi", cmd_motivasi))
+app.add_handler(CallbackQueryHandler(button_handler))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message))
+print("Bot MEGA + AI jalan...")
+app.run_polling()
